@@ -28,10 +28,7 @@ class EditorViewModel: ObservableObject {
     // Crop states
     @Published var cropRect: CGRect?
     @Published var isCropping = false
-
-    // Undo/Redo
-    @Published var canUndo = false
-    @Published var canRedo = false
+    @Published var paddingAmount: CGFloat = 0 // 白边宽度（像素）
 
     // Error handling
     @Published var showError = false
@@ -41,12 +38,6 @@ class EditorViewModel: ObservableObject {
     private let fileStorageManager = FileStorageManager.shared
     private let databaseManager = DatabaseManager.shared
     private let originalSticker: Sticker?
-
-    // Undo stack (最多20步)
-    private var undoStack: [PKDrawing] = []
-    private var redoStack: [PKDrawing] = []
-    private let maxUndoSteps = Constants.UI.maxUndoSteps
-    private var isFirstDrawing = true // 标记是否是第一次绘画
 
     // MARK: - Initialization
     init(image: UIImage, sticker: Sticker? = nil) {
@@ -60,9 +51,6 @@ class EditorViewModel: ObservableObject {
         canvasView.drawing = PKDrawing()
         canvasView.backgroundColor = .clear
         canvasView.isOpaque = false
-
-        // 不在初始化时保存状态，等第一次绘画时再保存
-        updateUndoRedoState()
 
         // 设置工具
         updateTool()
@@ -104,74 +92,6 @@ class EditorViewModel: ObservableObject {
         if currentTool == .brush {
             updateTool()
         }
-    }
-
-    // MARK: - Undo/Redo
-    func saveDrawingState() {
-        let currentDrawing = canvasView.drawing
-
-        // 如果是第一次绘画，先保存空白状态
-        if isFirstDrawing {
-            undoStack.append(PKDrawing()) // 保存空白状态
-            isFirstDrawing = false
-        }
-
-        // 只有当绘画实际有变化时才保存
-        if let lastDrawing = undoStack.last, lastDrawing.dataRepresentation() == currentDrawing.dataRepresentation() {
-            return // 没有变化，不保存
-        }
-
-        undoStack.append(currentDrawing)
-
-        // 限制栈大小
-        if undoStack.count > maxUndoSteps {
-            undoStack.removeFirst()
-        }
-
-        // 清空重做栈
-        redoStack.removeAll()
-
-        updateUndoRedoState()
-    }
-
-    func undo() {
-        guard canUndo else { return }
-
-        // 当前的drawing
-        let currentDrawing = canvasView.drawing
-
-        if undoStack.count == 1 {
-            // 只剩一个历史状态（通常是空白），恢复到它
-            redoStack.append(currentDrawing)
-            canvasView.drawing = undoStack[0]
-        } else if undoStack.count >= 2 {
-            // 有多个历史状态
-            redoStack.append(currentDrawing)
-            let previousDrawing = undoStack[undoStack.count - 2]
-            undoStack.removeLast()
-            canvasView.drawing = previousDrawing
-        }
-
-        updateUndoRedoState()
-    }
-
-    func redo() {
-        guard !redoStack.isEmpty else { return }
-
-        // 保存当前状态
-        let currentDrawing = canvasView.drawing
-        undoStack.append(currentDrawing)
-
-        // 恢复重做状态
-        let nextDrawing = redoStack.removeLast()
-        canvasView.drawing = nextDrawing
-
-        updateUndoRedoState()
-    }
-
-    private func updateUndoRedoState() {
-        canUndo = !undoStack.isEmpty
-        canRedo = !redoStack.isEmpty
     }
 
     // MARK: - Text Overlay Management
@@ -219,28 +139,62 @@ class EditorViewModel: ObservableObject {
 
         // 初始化裁切区域为整个图片
         cropRect = CGRect(x: 0, y: 0, width: originalImage.size.width, height: originalImage.size.height)
+        paddingAmount = 0
     }
 
     func applyCrop() {
         guard let cropRect = cropRect else { return }
 
-        // 裁切图片
-        if let croppedImage = cropImage(originalImage, to: cropRect) {
-            originalImage = croppedImage
+        // 如果有白边，添加白边；否则裁切图片
+        if paddingAmount > 0 {
+            // 添加白边
+            if let paddedImage = addPadding(to: originalImage, padding: paddingAmount) {
+                originalImage = paddedImage
+            }
+        } else {
+            // 裁切图片
+            if let croppedImage = cropImage(originalImage, to: cropRect) {
+                originalImage = croppedImage
+            }
         }
 
         isCropping = false
         self.cropRect = nil
+        paddingAmount = 0
     }
 
     func cancelCrop() {
         isCropping = false
         cropRect = nil
+        paddingAmount = 0
     }
 
     private func cropImage(_ image: UIImage, to rect: CGRect) -> UIImage? {
         guard let cgImage = image.cgImage?.cropping(to: rect) else { return nil }
         return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+    }
+
+    private func addPadding(to image: UIImage, padding: CGFloat) -> UIImage? {
+        let newSize = CGSize(
+            width: image.size.width + padding * 2,
+            height: image.size.height + padding * 2
+        )
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = false
+
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+
+        return renderer.image { context in
+            // 填充白色背景
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: newSize))
+
+            // 在中心绘制原图
+            let drawPoint = CGPoint(x: padding, y: padding)
+            image.draw(at: drawPoint)
+        }
     }
 
     // MARK: - Export

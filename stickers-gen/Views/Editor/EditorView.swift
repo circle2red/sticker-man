@@ -193,13 +193,6 @@ struct CanvasView: UIViewRepresentable {
         init(viewModel: EditorViewModel) {
             self.viewModel = viewModel
         }
-
-        // 只在绘画结束时保存状态（用户抬起手指/笔）
-        func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
-            Task { @MainActor in
-                viewModel.saveDrawingState()
-            }
-        }
     }
 }
 
@@ -236,21 +229,6 @@ struct EditorToolbar: View {
                 )
 
                 Spacer()
-
-                // 撤销/重做
-                Button(action: { viewModel.undo() }) {
-                    Image(systemName: "arrow.uturn.backward")
-                        .font(.title3)
-                        .foregroundColor(viewModel.canUndo ? .primary : .gray)
-                }
-                .disabled(!viewModel.canUndo)
-
-                Button(action: { viewModel.redo() }) {
-                    Image(systemName: "arrow.uturn.forward")
-                        .font(.title3)
-                        .foregroundColor(viewModel.canRedo ? .primary : .gray)
-                }
-                .disabled(!viewModel.canRedo)
             }
 
             // 画笔工具选项
@@ -286,8 +264,6 @@ struct ToolButton: View {
 struct BrushOptionsView: View {
     @ObservedObject var viewModel: EditorViewModel
 
-    let brushSizes: [CGFloat] = [2, 4, 8, 16, 32]
-
     var body: some View {
         VStack(spacing: 8) {
             // 颜色选择
@@ -311,25 +287,27 @@ struct BrushOptionsView: View {
                 }
             }
 
-            // 粗细选择
+            // 粗细滑块
             HStack {
                 Text("粗细")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                Spacer()
-
-                HStack(spacing: 8) {
-                    ForEach(brushSizes, id: \.self) { size in
-                        Button(action: {
-                            viewModel.updateBrushWidth(size)
-                        }) {
-                            Circle()
-                                .fill(viewModel.brushWidth == size ? Color.blue : Color.gray)
-                                .frame(width: size * 1.5, height: size * 1.5)
-                        }
-                    }
+                Slider(value: $viewModel.brushWidth, in: 2...32, step: 7.5) {
+                    Text("粗细")
+                } minimumValueLabel: {
+                    Text("细")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                } maximumValueLabel: {
+                    Text("粗")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
+                .onChange(of: viewModel.brushWidth) { _, newValue in
+                    viewModel.updateBrushWidth(newValue)
+                }
+                .frame(maxWidth: 200)
             }
         }
     }
@@ -475,57 +453,64 @@ struct DraggableTextView: View {
 // MARK: - Crop View
 struct CropView: View {
     @ObservedObject var viewModel: EditorViewModel
-    @State private var scale: CGFloat = 1.0
-    @State private var lastScale: CGFloat = 1.0
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
+    @State private var cropRect: CGRect = .zero
+    @State private var imageDisplaySize: CGSize = .zero
+    @State private var imageOffset: CGPoint = .zero
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.black.ignoresSafeArea()
+            GeometryReader { geometry in
+                ZStack {
+                    Color.black.ignoresSafeArea()
 
-                // 显示图片
-                Image(uiImage: viewModel.originalImage)
-                    .resizable()
-                    .scaledToFit()
-                    .scaleEffect(scale)
-                    .offset(offset)
-                    .gesture(
-                        SimultaneousGesture(
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    scale = lastScale * value
-                                }
-                                .onEnded { _ in
-                                    lastScale = scale
-                                },
-                            DragGesture()
-                                .onChanged { value in
-                                    offset = CGSize(
-                                        width: lastOffset.width + value.translation.width,
-                                        height: lastOffset.height + value.translation.height
-                                    )
-                                }
-                                .onEnded { _ in
-                                    lastOffset = offset
-                                }
-                        )
-                    )
+                    // 显示图片和裁剪框
+                    VStack {
+                        // 图片区域
+                        ZStack {
+                            // 背景图片
+                            Image(uiImage: viewModel.originalImage)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: geometry.size.width, maxHeight: geometry.size.height - 200)
+                                .background(
+                                    GeometryReader { imageGeometry in
+                                        Color.clear
+                                            .onAppear {
+                                                calculateImageLayout(containerSize: geometry.size, imageGeometry: imageGeometry)
+                                            }
+                                    }
+                                )
 
-                // 提示文本
-                VStack {
-                    Text("捏合缩放，拖动调整位置")
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color.black.opacity(0.5))
-                        .cornerRadius(8)
-                        .padding(.top, 60)
+                            // 裁剪框覆盖层
+                            if imageDisplaySize != .zero && viewModel.paddingAmount == 0 {
+                                CropOverlayView(
+                                    cropRect: $cropRect,
+                                    imageSize: imageDisplaySize,
+                                    imageOffset: imageOffset
+                                )
+                            }
+                        }
 
-                    Spacer()
+                        Spacer()
+
+                        // 底部控制栏
+                        VStack(spacing: 16) {
+                            // 白边滑块
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("白边宽度: \(Int(viewModel.paddingAmount))px")
+                                    .foregroundColor(.white)
+                                    .font(.caption)
+
+                                Slider(value: $viewModel.paddingAmount, in: 0...200, step: 10)
+                                    .accentColor(.white)
+                            }
+                            .padding(.horizontal, 20)
+                        }
+                        .padding(.bottom, 20)
+                    }
                 }
             }
-            .navigationTitle("裁剪")
+            .navigationTitle(viewModel.paddingAmount > 0 ? "添加白边" : "裁剪")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -544,11 +529,161 @@ struct CropView: View {
         }
     }
 
+    private func calculateImageLayout(containerSize: CGSize, imageGeometry: GeometryProxy) {
+        let imageSize = viewModel.originalImage.size
+        let imageAspect = imageSize.width / imageSize.height
+        let containerAspect = containerSize.width / (containerSize.height - 200)
+
+        if imageAspect > containerAspect {
+            imageDisplaySize.width = containerSize.width
+            imageDisplaySize.height = containerSize.width / imageAspect
+        } else {
+            imageDisplaySize.height = containerSize.height - 200
+            imageDisplaySize.width = (containerSize.height - 200) * imageAspect
+        }
+
+        imageOffset = CGPoint(
+            x: (containerSize.width - imageDisplaySize.width) / 2,
+            y: (containerSize.height - 200 - imageDisplaySize.height) / 2
+        )
+
+        // 初始化裁剪框为整个图片
+        cropRect = CGRect(origin: .zero, size: imageDisplaySize)
+    }
+
     private func applyCropWithTransform() {
-        // 简化版本：重置变换后应用裁剪
-        // 实际项目中可以使用更复杂的裁剪逻辑
+        // 将屏幕坐标的裁剪框转换为图片坐标
+        let scaleX = viewModel.originalImage.size.width / imageDisplaySize.width
+        let scaleY = viewModel.originalImage.size.height / imageDisplaySize.height
+
+        let imageCropRect = CGRect(
+            x: cropRect.origin.x * scaleX,
+            y: cropRect.origin.y * scaleY,
+            width: cropRect.size.width * scaleX,
+            height: cropRect.size.height * scaleY
+        )
+
+        viewModel.cropRect = imageCropRect
         viewModel.applyCrop()
     }
+}
+
+// MARK: - Crop Overlay View
+struct CropOverlayView: View {
+    @Binding var cropRect: CGRect
+    let imageSize: CGSize
+    let imageOffset: CGPoint
+
+    @State private var dragOffset: CGSize = .zero
+    @State private var activeHandle: CropHandle? = nil
+
+    var body: some View {
+        ZStack {
+            // 半透明遮罩（裁剪区域外）
+            GeometryReader { geometry in
+                Path { path in
+                    // 外部矩形
+                    path.addRect(CGRect(origin: .zero, size: geometry.size))
+                    // 裁剪框（挖空）
+                    let displayRect = CGRect(
+                        x: cropRect.origin.x + imageOffset.x,
+                        y: cropRect.origin.y + imageOffset.y,
+                        width: cropRect.width,
+                        height: cropRect.height
+                    )
+                    path.addRect(displayRect)
+                }
+                .fill(Color.black.opacity(0.5), style: FillStyle(eoFill: true))
+            }
+            .allowsHitTesting(false)
+
+            // 裁剪框边框
+            Rectangle()
+                .stroke(Color.white, lineWidth: 2)
+                .frame(width: cropRect.width, height: cropRect.height)
+                .position(
+                    x: cropRect.origin.x + imageOffset.x + cropRect.width / 2,
+                    y: cropRect.origin.y + imageOffset.y + cropRect.height / 2
+                )
+                .allowsHitTesting(false)
+
+            // 四个角的拖拽手柄
+            ForEach(CropHandle.allCases, id: \.self) { handle in
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 20, height: 20)
+                    .position(handlePosition(for: handle))
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                handleDrag(handle: handle, translation: value.translation)
+                            }
+                            .onEnded { _ in
+                                activeHandle = nil
+                            }
+                    )
+            }
+        }
+    }
+
+    private func handlePosition(for handle: CropHandle) -> CGPoint {
+        let displayRect = CGRect(
+            x: cropRect.origin.x + imageOffset.x,
+            y: cropRect.origin.y + imageOffset.y,
+            width: cropRect.width,
+            height: cropRect.height
+        )
+
+        switch handle {
+        case .topLeft:
+            return CGPoint(x: displayRect.minX, y: displayRect.minY)
+        case .topRight:
+            return CGPoint(x: displayRect.maxX, y: displayRect.minY)
+        case .bottomLeft:
+            return CGPoint(x: displayRect.minX, y: displayRect.maxY)
+        case .bottomRight:
+            return CGPoint(x: displayRect.maxX, y: displayRect.maxY)
+        }
+    }
+
+    private func handleDrag(handle: CropHandle, translation: CGSize) {
+        var newRect = cropRect
+
+        switch handle {
+        case .topLeft:
+            newRect.origin.x += translation.width
+            newRect.origin.y += translation.height
+            newRect.size.width -= translation.width
+            newRect.size.height -= translation.height
+        case .topRight:
+            newRect.origin.y += translation.height
+            newRect.size.width += translation.width
+            newRect.size.height -= translation.height
+        case .bottomLeft:
+            newRect.origin.x += translation.width
+            newRect.size.width -= translation.width
+            newRect.size.height += translation.height
+        case .bottomRight:
+            newRect.size.width += translation.width
+            newRect.size.height += translation.height
+        }
+
+        // 限制最小尺寸
+        if newRect.width >= 50 && newRect.height >= 50 {
+            // 限制在图片范围内
+            if newRect.origin.x >= 0 && newRect.origin.y >= 0 &&
+               newRect.maxX <= imageSize.width && newRect.maxY <= imageSize.height {
+                cropRect = newRect
+            }
+        }
+    }
+}
+
+enum CropHandle: CaseIterable {
+    case topLeft
+    case topRight
+    case bottomLeft
+    case bottomRight
 }
 
 #Preview {
