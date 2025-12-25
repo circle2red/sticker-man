@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import PhotosUI
+import Zip
 
 /// 导入视图模型
 @MainActor
@@ -97,8 +98,14 @@ class ImportViewModel: ObservableObject {
 
                 if fileExtension == "zip" {
                     // ZIP文件，批量导入
-                    let importedStickers = try await importZipFile(url)
-                    stickers.append(contentsOf: importedStickers)
+                    do {
+                        let importedStickers = try await importZipFile(url)
+                        stickers.append(contentsOf: importedStickers)
+                    } catch let error as ImportError {
+                        showErrorMessage(error.localizedDescription ?? "ZIP导入失败")
+                    } catch {
+                        showErrorMessage("ZIP导入失败: \(error.localizedDescription)")
+                    }
                 } else if ["jpg", "jpeg", "png", "gif"].contains(fileExtension) {
                     // 图片文件
                     guard let image = UIImage(contentsOfFile: url.path) else {
@@ -143,11 +150,24 @@ class ImportViewModel: ObservableObject {
         }
 
         // 解压ZIP
-        try await unzipFile(at: url, to: tempDir)
+        do {
+            try await unzipFile(at: url, to: tempDir)
+        } catch {
+            print("❌ Failed to unzip file: \(error)")
+            throw ImportError.unzipFailed
+        }
 
         // 查找所有图片文件
         let imageURLs = try findImageFiles(in: tempDir)
+
+        // 检查是否找到图片
+        if imageURLs.isEmpty {
+            print("⚠️ No images found in ZIP file")
+            throw ImportError.noImagesFound
+        }
+
         totalCount = imageURLs.count
+        print("📦 Found \(totalCount) images in ZIP file")
 
         var stickers: [Sticker] = []
 
@@ -167,20 +187,15 @@ class ImportViewModel: ObservableObject {
             importProgress = Double(importedCount) / Double(totalCount)
         }
 
+        print("✅ Successfully imported \(stickers.count) images from ZIP")
         return stickers
     }
 
     /// 解压ZIP文件
     private func unzipFile(at sourceURL: URL, to destinationURL: URL) async throws {
-        // 简单实现：使用系统解压
-        // 注意：这里需要集成Zip库来实现完整功能
-        // 当前先用简单的实现
-
-        // 如果有Zip库，使用：
-        // try Zip.unzipFile(sourceURL, destination: destinationURL, overwrite: true, password: nil)
-
-        // 临时方案：抛出错误提示需要实现
-        throw ImportError.zipNotSupported
+        // 使用 Zip 库解压文件
+        try Zip.unzipFile(sourceURL, destination: destinationURL, overwrite: true, password: nil)
+        print("✅ Unzipped file: \(sourceURL.lastPathComponent)")
     }
 
     /// 查找目录中的所有图片文件
@@ -224,18 +239,18 @@ class ImportViewModel: ObservableObject {
 
 // MARK: - Import Error
 enum ImportError: Error, LocalizedError {
-    case zipNotSupported
     case noImagesFound
     case invalidFile
+    case unzipFailed
 
     var errorDescription: String? {
         switch self {
-        case .zipNotSupported:
-            return "ZIP文件暂不支持，请先集成Zip库"
         case .noImagesFound:
-            return "未找到任何图片文件"
+            return "ZIP文件中未找到任何图片文件"
         case .invalidFile:
             return "无效的文件"
+        case .unzipFailed:
+            return "ZIP文件解压失败"
         }
     }
 }
