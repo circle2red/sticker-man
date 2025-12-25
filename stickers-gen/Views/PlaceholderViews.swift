@@ -57,9 +57,6 @@ struct FeatureRow: View {
     }
 }
 
-#Preview("Editor") {
-    EditorPlaceholderView()
-}
 
 #Preview("AI") {
     AIGeneratorPlaceholderView()

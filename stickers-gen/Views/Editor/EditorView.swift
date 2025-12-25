@@ -97,6 +97,10 @@ struct EditorCanvasView: View {
             let offsetY = (geometry.size.height - displaySize.height) / 2
 
             ZStack {
+                // 灰色背景（编辑区域外）
+                Color(.systemGray5)
+                    .ignoresSafeArea()
+
                 // 背景图片
                 Image(uiImage: viewModel.originalImage)
                     .resizable()
