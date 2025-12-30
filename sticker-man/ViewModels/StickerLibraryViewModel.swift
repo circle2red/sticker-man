@@ -92,9 +92,9 @@ class StickerLibraryViewModel: ObservableObject {
             print("❌ Failed to fetch search suggestions: \(error)")
         }
 
-        // 按标签搜索表情包
+        // 按文件名或标签搜索表情包
         do {
-            filteredStickers = try await databaseManager.searchStickers(byTag: query)
+            filteredStickers = try await databaseManager.searchStickers(query: query)
         } catch {
             showErrorMessage("搜索失败: \(error.localizedDescription)")
         }

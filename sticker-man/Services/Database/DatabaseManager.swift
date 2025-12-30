@@ -197,6 +197,45 @@ actor DatabaseManager {
         return stickers
     }
 
+    /// 根据文件名或标签搜索表情包
+    func searchStickers(query searchQuery: String) async throws -> [Sticker] {
+        guard let db = db else { throw DatabaseError.notInitialized }
+
+        // 搜索文件名或标签
+        let query = """
+            SELECT DISTINCT s.*
+            FROM stickers s
+            LEFT JOIN sticker_tags st ON s.id = st.sticker_id
+            LEFT JOIN tags t ON st.tag_id = t.id
+            WHERE s.filename LIKE ? OR t.name LIKE ?
+            ORDER BY s.is_pinned DESC, s.created_at DESC
+        """
+
+        var stickers: [Sticker] = []
+        let searchPattern = "%\(searchQuery)%"
+
+        for row in try db.prepare(query, [searchPattern, searchPattern]) {
+            let sticker = Sticker(
+                id: row[0] as! String,
+                filename: row[1] as! String,
+                filePath: row[2] as! String,
+                fileSize: Int(row[3] as! Int64),
+                width: Int(row[4] as! Int64),
+                height: Int(row[5] as! Int64),
+                format: row[6] as! String,
+                createdAt: Int(row[7] as! Int64),
+                modifiedAt: Int(row[8] as! Int64),
+                isPinned: (row[9] as! Int64) == 1,
+                isFavorite: (row[10] as! Int64) == 1,
+                usageCount: Int(row[11] as! Int64),
+                tags: try await fetchTagsForSticker(id: row[0] as! String)
+            )
+            stickers.append(sticker)
+        }
+
+        return stickers
+    }
+
     // MARK: - Tag Operations
     /// 获取或创建标签
     private func getOrCreateTag(name: String) async throws -> Int {

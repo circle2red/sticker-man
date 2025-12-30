@@ -22,7 +22,7 @@ struct SearchBar: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.gray)
 
-                TextField("搜索标签...", text: $searchText)
+                TextField("搜索标签或文件名...", text: $searchText)
                     .focused($isFocused)
                     .textFieldStyle(.plain)
 
