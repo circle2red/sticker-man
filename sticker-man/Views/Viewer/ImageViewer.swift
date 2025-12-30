@@ -145,36 +145,11 @@ struct ImageViewerView: View {
     @ViewBuilder
     private var menuButtons: some View {
         if let sticker = currentSticker {
-            Button("编辑标签") {
-                onMenuAction(.editTags, sticker)
+            StickerContextMenu(sticker: sticker) { action in
+                onMenuAction(action, sticker)
             }
-
-            Button("编辑图片") {
-                onMenuAction(.editImage, sticker)
-            }
-
-            Button(sticker.isPinned ? "取消置顶" : "置顶") {
-                onMenuAction(.togglePin, sticker)
-            }
-
-            Button("导出为JPG") {
-                onMenuAction(.exportJPG, sticker)
-            }
-
-            Button("导出为PNG") {
-                onMenuAction(.exportPNG, sticker)
-            }
-
-            Button("分享") {
-                onMenuAction(.share, sticker)
-            }
-
-            Button("删除", role: .destructive) {
-                onMenuAction(.delete, sticker)
-            }
+            .buttons
         }
-
-        Button("取消", role: .cancel) {}
     }
 }
 

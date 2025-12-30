@@ -19,6 +19,12 @@ struct IdentifiableViewerIndex: Identifiable {
     let index: Int
 }
 
+/// 可识别的URL包装类，用于 sheet
+struct IdentifiableURL: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
 /// 待执行的操作类型
 enum PendingAction {
     case editTags(Sticker)
@@ -48,8 +54,7 @@ struct StickerLibraryView: View {
     @State private var pendingAction: PendingAction?
 
     // Share
-    @State private var shareItem: URL?
-    @State private var showingShareSheet = false
+    @State private var shareItem: IdentifiableURL?
 
     var body: some View {
         ZStack {
@@ -158,10 +163,8 @@ struct StickerLibraryView: View {
                     }
                 }
         }
-        .sheet(isPresented: $showingShareSheet) {
-            if let shareItem = shareItem {
-                ShareSheet(items: [shareItem])
-            }
+        .sheet(item: $shareItem) { identifiableURL in
+            ShareSheet(items: [identifiableURL.url])
         }
         .sheet(isPresented: $showingImport) {
             ImportView()
@@ -215,35 +218,10 @@ struct StickerLibraryView: View {
             titleVisibility: .visible
         ) {
             if let sticker = selectedSticker {
-                Button("编辑标签") {
-                    handleEditTags(sticker)
+                StickerContextMenu(sticker: sticker) { action in
+                    handleMenuAction(action, sticker: sticker)
                 }
-
-                Button("编辑图片") {
-                    handleEditImage(sticker)
-                }
-
-                Button(sticker.isPinned ? "取消置顶" : "置顶") {
-                    handleTogglePin(sticker)
-                }
-
-                Button("导出为JPG") {
-                    handleExport(sticker, format: "jpg")
-                }
-
-                Button("导出为PNG") {
-                    handleExport(sticker, format: "png")
-                }
-
-                Button("分享") {
-                    handleShare(sticker)
-                }
-
-                Button("删除", role: .destructive) {
-                    handleDelete(sticker)
-                }
-
-                Button("取消", role: .cancel) {}
+                .buttons
             }
         }
         .alert("确认删除", isPresented: $showingBatchDeleteConfirmation) {
@@ -311,8 +289,9 @@ struct StickerLibraryView: View {
     private func handleExport(_ sticker: Sticker, format: String) {
         Task {
             if let url = await viewModel.exportSticker(sticker, format: format) {
-                shareItem = url
-                showingShareSheet = true
+                await MainActor.run {
+                    shareItem = IdentifiableURL(url: url)
+                }
             }
         }
     }
@@ -320,8 +299,9 @@ struct StickerLibraryView: View {
     private func handleShare(_ sticker: Sticker) {
         Task {
             if let url = await viewModel.exportSticker(sticker, format: "jpg") {
-                shareItem = url
-                showingShareSheet = true
+                await MainActor.run {
+                    shareItem = IdentifiableURL(url: url)
+                }
             }
         }
     }
@@ -399,8 +379,9 @@ struct StickerLibraryView: View {
     private func handleBatchExport() {
         Task {
             if let url = await viewModel.batchExportToZip(stickerIds: Array(selectedStickers)) {
-                shareItem = url
-                showingShareSheet = true
+                await MainActor.run {
+                    shareItem = IdentifiableURL(url: url)
+                }
             }
         }
     }
