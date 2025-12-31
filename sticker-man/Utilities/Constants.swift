@@ -33,6 +33,7 @@ enum Constants {
         static let modelName = "ai_model_name"
         static let temperature = "ai_temperature"
         static let maxTokens = "ai_max_tokens"
+        static let showDeleteConfirmation = "show_delete_confirmation"
     }
 
     // MARK: - UI

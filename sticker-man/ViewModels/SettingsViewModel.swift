@@ -21,6 +21,10 @@ class SettingsViewModel: ObservableObject {
     // MARK: - AI Config
     @Published var aiConfig: AIConfig = AIConfig.load()
 
+    // MARK: - User Preferences
+    @AppStorage(Constants.UserDefaultsKeys.showDeleteConfirmation)
+    var showDeleteConfirmation: Bool = true
+
     // MARK: - Services
     private let fileStorageManager = FileStorageManager.shared
     private let databaseManager = DatabaseManager.shared

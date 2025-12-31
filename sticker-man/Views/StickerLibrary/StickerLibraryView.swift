@@ -57,6 +57,12 @@ struct StickerLibraryView: View {
     @State private var selectedStickers: Set<String> = []
     @State private var showingBatchDeleteConfirmation = false
 
+    // Delete confirmation
+    @State private var showingDeleteConfirmation = false
+    @State private var stickerToDelete: Sticker?
+    @AppStorage(Constants.UserDefaultsKeys.showDeleteConfirmation)
+    private var deleteConfirmationEnabled: Bool = true
+
     // Pending action - 用于在关闭一个 fullScreenCover 后执行另一个操作
     @State private var pendingAction: PendingAction?
 
@@ -251,6 +257,21 @@ struct StickerLibraryView: View {
         } message: {
             Text("确定要删除选中的 \(selectedStickers.count) 个表情包吗？此操作无法撤销。")
         }
+        .alert("确认删除", isPresented: $showingDeleteConfirmation) {
+            Button("取消", role: .cancel) {
+                stickerToDelete = nil
+            }
+            Button("删除", role: .destructive) {
+                if let sticker = stickerToDelete {
+                    performDelete(sticker)
+                    stickerToDelete = nil
+                }
+            }
+        } message: {
+            if let sticker = stickerToDelete {
+                Text("确定要删除“\(sticker.filename)”吗？此操作无法撤销。")
+            }
+        }
         .alert("重命名", isPresented: $showingRenameDialog) {
             TextField("新名称", text: $newStickerName)
             Button("取消", role: .cancel) {
@@ -348,6 +369,17 @@ struct StickerLibraryView: View {
     }
 
     private func handleDelete(_ sticker: Sticker) {
+        if deleteConfirmationEnabled {
+            // 显示确认对话框
+            stickerToDelete = sticker
+            showingDeleteConfirmation = true
+        } else {
+            // 直接删除
+            performDelete(sticker)
+        }
+    }
+
+    private func performDelete(_ sticker: Sticker) {
         Task {
             await viewModel.deleteSticker(sticker)
         }

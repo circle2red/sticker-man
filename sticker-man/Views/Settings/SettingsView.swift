@@ -76,6 +76,18 @@ struct SettingsView: View {
                 }
             }
 
+            // 偏好设置
+            Section("偏好设置") {
+                Toggle(isOn: $viewModel.showDeleteConfirmation) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("删除确认")
+                        Text("删除表情包前显示确认提示")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
             // 关于
             Section("关于") {
                 HStack {
