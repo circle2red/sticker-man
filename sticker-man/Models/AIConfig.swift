@@ -12,21 +12,15 @@ struct AIConfig: Codable {
     var apiEndpoint: String
     var apiKey: String
     var modelName: String
-    var temperature: Double
-    var maxTokens: Int
 
     init(
         apiEndpoint: String = Constants.AI.defaultEndpoint,
         apiKey: String = "",
-        modelName: String = Constants.AI.defaultModelName,
-        temperature: Double = Constants.AI.defaultTemperature,
-        maxTokens: Int = Constants.AI.defaultMaxTokens
+        modelName: String = Constants.AI.defaultModelName
     ) {
         self.apiEndpoint = apiEndpoint
         self.apiKey = apiKey
         self.modelName = modelName
-        self.temperature = temperature
-        self.maxTokens = maxTokens
     }
 
     // MARK: - UserDefaults Storage
@@ -36,13 +30,7 @@ struct AIConfig: Codable {
         return AIConfig(
             apiEndpoint: defaults.string(forKey: Constants.UserDefaultsKeys.apiEndpoint) ?? Constants.AI.defaultEndpoint,
             apiKey: defaults.string(forKey: Constants.UserDefaultsKeys.apiKey) ?? "",
-            modelName: defaults.string(forKey: Constants.UserDefaultsKeys.modelName) ?? Constants.AI.defaultModelName,
-            temperature: defaults.double(forKey: Constants.UserDefaultsKeys.temperature) != 0
-                ? defaults.double(forKey: Constants.UserDefaultsKeys.temperature)
-                : Constants.AI.defaultTemperature,
-            maxTokens: defaults.integer(forKey: Constants.UserDefaultsKeys.maxTokens) != 0
-                ? defaults.integer(forKey: Constants.UserDefaultsKeys.maxTokens)
-                : Constants.AI.defaultMaxTokens
+            modelName: defaults.string(forKey: Constants.UserDefaultsKeys.modelName) ?? Constants.AI.defaultModelName
         )
     }
 
@@ -52,8 +40,6 @@ struct AIConfig: Codable {
         defaults.set(apiEndpoint, forKey: Constants.UserDefaultsKeys.apiEndpoint)
         defaults.set(apiKey, forKey: Constants.UserDefaultsKeys.apiKey)
         defaults.set(modelName, forKey: Constants.UserDefaultsKeys.modelName)
-        defaults.set(temperature, forKey: Constants.UserDefaultsKeys.temperature)
-        defaults.set(maxTokens, forKey: Constants.UserDefaultsKeys.maxTokens)
     }
 
     /// 清除配置
@@ -62,8 +48,6 @@ struct AIConfig: Codable {
         defaults.removeObject(forKey: Constants.UserDefaultsKeys.apiEndpoint)
         defaults.removeObject(forKey: Constants.UserDefaultsKeys.apiKey)
         defaults.removeObject(forKey: Constants.UserDefaultsKeys.modelName)
-        defaults.removeObject(forKey: Constants.UserDefaultsKeys.temperature)
-        defaults.removeObject(forKey: Constants.UserDefaultsKeys.maxTokens)
     }
 
     /// 检查配置是否完整

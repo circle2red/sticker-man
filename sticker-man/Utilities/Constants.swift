@@ -31,8 +31,6 @@ enum Constants {
         static let apiEndpoint = "ai_api_endpoint"
         static let apiKey = "ai_api_key"
         static let modelName = "ai_model_name"
-        static let temperature = "ai_temperature"
-        static let maxTokens = "ai_max_tokens"
         static let showDeleteConfirmation = "show_delete_confirmation"
     }
 
@@ -42,15 +40,12 @@ enum Constants {
         static let searchDebounceMilliseconds = 300
         static let maxSearchSuggestions = 5
         static let maxSearchHistory = 5
-        static let maxUndoSteps = 20
     }
 
     // MARK: - AI
     enum AI {
         static let defaultEndpoint = "https://openrouter.ai/api/v1/chat/completions"
         static let defaultModelName = "google/gemini-2.5-flash-image"
-        static let defaultTemperature = 0.7
-        static let defaultMaxTokens = 2048
         static let timeoutSeconds = 30.0
         static let maxRetries = 2
     }
